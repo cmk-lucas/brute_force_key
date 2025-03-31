@@ -1,3 +1,5 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import itertools
 import string
 import time
@@ -134,3 +136,31 @@ if __name__ == "__main__":
 
     if not resultat:
         print("\n[✖] Mot de passe non trouvé.")
+
+# Interface graphique avec Tkinter
+root = tk.Tk()
+root.title("BruteForce Tool")
+root.geometry("400x300")
+
+tk.Label(root, text="Mot de passe :").pack()
+entry_password = tk.Entry(root)
+entry_password.pack()
+
+tk.Label(root, text="Longueur min :").pack()
+entry_min_len = tk.Entry(root)
+entry_min_len.insert(0, "1")
+entry_min_len.pack()
+
+tk.Label(root, text="Longueur max :").pack()
+entry_max_len = tk.Entry(root)
+entry_max_len.insert(0, "4")
+entry_max_len.pack()
+
+var_hash = tk.BooleanVar()
+tk.Checkbutton(root, text="Le mot de passe est en hash", variable=var_hash).pack()
+
+tk.Button(root, text="Lancer l'attaque", command=run_attack).pack()
+result_label = tk.Label(root, text="")
+result_label.pack()
+
+root.mainloop()
