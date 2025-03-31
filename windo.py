@@ -2,10 +2,25 @@ import itertools
 import string
 import time
 
+# Dictionnaire intégré de mots de passe courants
+DICTIONARY = [
+    "123456", "password", "123456789", "qwerty", "abc123", "admin",
+    "letmein", "welcome", "monkey", "football", "iloveyou", "1234",
+    "passw0rd", "zaq1zaq1", "dragon", "sunshine", "princess", "password1"
+]
+
+def dictionary_attack(password):
+    """Essaie de trouver le mot de passe dans un dictionnaire intégré."""
+    for attempt in DICTIONARY:
+        print(f"[*] Tentative (dictionnaire) : {attempt}")
+        if attempt == password:
+            return attempt
+    return None
+
 def brute_force(password, min_length=1, max_length=4, show_attempts=False):
     """
-    Tente de deviner un mot de passe en générant toutes les combinaisons possibles.
-    
+    Tente de deviner un mot de passe avec un dictionnaire puis par force brute.
+
     Args:
         password (str): Le mot de passe à deviner.
         min_length (int): Longueur minimale du mot de passe.
@@ -15,23 +30,37 @@ def brute_force(password, min_length=1, max_length=4, show_attempts=False):
     Returns:
         dict ou None: Détails si réussi, sinon None.
     """
-    characters = string.ascii_lowercase + string.ascii_uppercase + string.digits
-    attempts = 0
     start_time = time.time()
+
+    # 1️⃣ Vérifier d'abord avec le dictionnaire
+    found = dictionary_attack(password)
+    if found:
+        duration = time.time() - start_time
+        return {
+            'mot_de_passe': found,
+            'essais': len(DICTIONARY),
+            'temps': round(duration, 2),
+            'méthode': "Dictionnaire"
+        }
+
+    # 2️⃣ Si non trouvé, passer au brute-force
+    characters = string.ascii_lowercase + string.ascii_uppercase + string.digits
+    attempts = len(DICTIONARY)  # Commence après les essais du dictionnaire
 
     for length in range(min_length, max_length + 1):
         for guess in itertools.product(characters, repeat=length):
             guess = ''.join(guess)
             attempts += 1
             if show_attempts:
-                print(f"[*] Tentative {attempts}: {guess}")
+                print(f"[*] Tentative (brute-force) {attempts}: {guess}")
 
             if guess == password:
                 duration = time.time() - start_time
                 return {
                     'mot_de_passe': guess,
                     'essais': attempts,
-                    'temps': round(duration, 2)
+                    'temps': round(duration, 2),
+                    'méthode': "Brute-force"
                 }
 
     return None
@@ -58,6 +87,7 @@ if __name__ == "__main__":
     if resultat:
         print(f"\n[✔] Mot de passe trouvé: {resultat['mot_de_passe']}")
         print(f"[🔢] Nombre d'essais: {resultat['essais']}")
+        print(f"[🛠] Méthode utilisée: {resultat['méthode']}")
         print(f"[⏳] Temps pris: {resultat['temps']} secondes")
     else:
         print("\n[✖] Mot de passe non trouvé.")
