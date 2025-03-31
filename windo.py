@@ -1,80 +1,118 @@
 import itertools
 import string
 import time
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
 
-# Dictionnaire intégré de mots de passe courants
+# Dictionnaire intégré (peut être remplacé par un fichier externe)
 DICTIONARY = [
     "123456", "password", "123456789", "qwerty", "abc123", "admin",
-    "letmein", "welcome", "monkey", "football", "iloveyou", "1234",
-    "passw0rd", "zaq1zaq1", "dragon", "sunshine", "princess", "password1"
+    "letmein", "welcome", "monkey", "football", "iloveyou", "passw0rd"
 ]
 
-def dictionary_attack(password):
-    """Essaie de trouver le mot de passe dans un dictionnaire intégré."""
+def hash_password(password, algorithm="sha256"):
+    """Retourne le hash du mot de passe selon l'algorithme choisi."""
+    return hashlib.new(algorithm, password.encode()).hexdigest()
+
+def dictionary_attack(password, hash_mode=False, algorithm="sha256"):
+    """Teste d'abord les mots du dictionnaire avant le brute-force."""
     for attempt in DICTIONARY:
-        print(f"[*] Tentative (dictionnaire) : {attempt}")
-        if attempt == password:
+        test_value = hash_password(attempt, algorithm) if hash_mode else attempt
+        print(f"[*] Test (dictionnaire) : {attempt}")
+        if test_value == password:
             return attempt
     return None
 
-def brute_force(password, min_length=1, max_length=4, show_attempts=False):
+def load_wordlist(file_path):
+    """Charge un fichier de mots de passe."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return [line.strip() for line in f]
+    except FileNotFoundError:
+        print("[⚠] Fichier introuvable.")
+        return []
+
+def mutate_password(password):
+    """Génère des variantes du mot de passe (admin → Admin123!)."""
+    return [
+        password,
+        password.capitalize(),
+        password + "123",
+        password + "!",
+        password.replace("a", "@").replace("o", "0").replace("e", "3")
+    ]
+
+def brute_force(password, min_length=1, max_length=4, show_attempts=False, hash_mode=False, algorithm="sha256"):
     """
-    Tente de deviner un mot de passe avec un dictionnaire puis par force brute.
-
-    Args:
-        password (str): Le mot de passe à deviner.
-        min_length (int): Longueur minimale du mot de passe.
-        max_length (int): Longueur maximale du mot de passe.
-        show_attempts (bool): Affiche chaque tentative si True.
-
-    Returns:
-        dict ou None: Détails si réussi, sinon None.
+    Tente de deviner un mot de passe via dictionnaire puis brute-force.
     """
     start_time = time.time()
-
-    # 1️⃣ Vérifier d'abord avec le dictionnaire
-    found = dictionary_attack(password)
+    
+    # 1️⃣ Attaque dictionnaire (y compris avec hash)
+    found = dictionary_attack(password, hash_mode, algorithm)
     if found:
-        duration = time.time() - start_time
-        return {
-            'mot_de_passe': found,
-            'essais': len(DICTIONARY),
-            'temps': round(duration, 2),
-            'méthode': "Dictionnaire"
-        }
+        return generate_report(found, len(DICTIONARY), time.time() - start_time, "Dictionnaire")
 
-    # 2️⃣ Si non trouvé, passer au brute-force
+    # 2️⃣ Mutation des mots de passe du dictionnaire
+    for word in DICTIONARY:
+        for variation in mutate_password(word):
+            print(f"[*] Test (mutation) : {variation}")
+            if variation == password:
+                return generate_report(variation, len(DICTIONARY), time.time() - start_time, "Mutation")
+
+    # 3️⃣ Brute-force total
     characters = string.ascii_lowercase + string.ascii_uppercase + string.digits
-    attempts = len(DICTIONARY)  # Commence après les essais du dictionnaire
+    attempts = len(DICTIONARY)
 
-    for length in range(min_length, max_length + 1):
-        for guess in itertools.product(characters, repeat=length):
-            guess = ''.join(guess)
-            attempts += 1
-            if show_attempts:
-                print(f"[*] Tentative (brute-force) {attempts}: {guess}")
+    def test_guess(guess):
+        return hash_password(guess, algorithm) if hash_mode else guess
 
-            if guess == password:
-                duration = time.time() - start_time
-                return {
-                    'mot_de_passe': guess,
-                    'essais': attempts,
-                    'temps': round(duration, 2),
-                    'méthode': "Brute-force"
-                }
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        for length in range(min_length, max_length + 1):
+            for guess_tuple in itertools.product(characters, repeat=length):
+                guess = ''.join(guess_tuple)
+                attempts += 1
+                if show_attempts:
+                    print(f"[*] Tentative {attempts}: {guess}")
+
+                if test_guess(guess) == password:
+                    return generate_report(guess, attempts, time.time() - start_time, "Brute-force")
 
     return None
 
+def generate_report(password_found, attempts, time_taken, method):
+    """Génère un rapport des tests de mot de passe."""
+    report = f"""
+    === Rapport de test ===
+    Mot de passe trouvé : {password_found}
+    Nombre d'essais : {attempts}
+    Temps écoulé : {time_taken:.2f} secondes
+    Méthode utilisée : {method}
+    """
+    print(report)
+    with open("rapport.txt", "w") as f:
+        f.write(report)
+    return {
+        "mot_de_passe": password_found,
+        "essais": attempts,
+        "temps": round(time_taken, 2),
+        "méthode": method
+    }
+
 if __name__ == "__main__":
-    # Demande le mot de passe et les paramètres à l'utilisateur
     mot_de_passe = input("Entrez le mot de passe à deviner : ").strip()
+    hash_mode = input("Le mot de passe est-il en hash ? (o/n) : ").lower() == 'o'
+    algo = "sha256"
+
+    if hash_mode:
+        algo = input("Entrez l'algorithme de hash (md5, sha256, sha1...) : ").strip()
     
     while True:
         try:
             min_length = int(input("Longueur minimale du mot de passe : "))
             max_length = int(input("Longueur maximale du mot de passe : "))
             if min_length > max_length or min_length < 1:
-                print("La longueur minimale doit être inférieure ou égale à la longueur maximale et positive.")
+                print("Longueur invalide.")
                 continue
             break
         except ValueError:
@@ -82,12 +120,17 @@ if __name__ == "__main__":
 
     show_attempts = input("Afficher les tentatives ? (o/n) : ").lower() == 'o'
 
-    resultat = brute_force(mot_de_passe, min_length, max_length, show_attempts)
+    # Test avec une wordlist externe
+    use_wordlist = input("Utiliser un fichier de wordlist ? (o/n) : ").lower() == 'o'
+    if use_wordlist:
+        file_path = input("Chemin du fichier de wordlist : ").strip()
+        wordlist = load_wordlist(file_path)
+        for word in wordlist:
+            if word == mot_de_passe:
+                generate_report(word, len(wordlist), 0, "Wordlist externe")
+                exit()
 
-    if resultat:
-        print(f"\n[✔] Mot de passe trouvé: {resultat['mot_de_passe']}")
-        print(f"[🔢] Nombre d'essais: {resultat['essais']}")
-        print(f"[🛠] Méthode utilisée: {resultat['méthode']}")
-        print(f"[⏳] Temps pris: {resultat['temps']} secondes")
-    else:
+    resultat = brute_force(mot_de_passe, min_length, max_length, show_attempts, hash_mode, algo)
+
+    if not resultat:
         print("\n[✖] Mot de passe non trouvé.")
